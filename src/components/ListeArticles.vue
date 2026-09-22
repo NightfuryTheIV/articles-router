@@ -1,64 +1,86 @@
 <script setup>
-    import { ref } from 'vue';
-    import ArticleItem from './ArticleItem.vue';
-    import BarreRecherche from './BarreRecherche.vue';
+import { ref, computed, watch } from 'vue'
+import BarreRecherche from './BarreRecherche.vue'
+import ArticleItem from './ArticleItem.vue'
 
-    const articles = ref([
-        {id: 1, artist: "Anri", title: "Remember Summer Days", album: "Timely!!"},
-        {id: 2, artist: "AJR", title: "World's Smallest Violin", album: "OK ORCHESTRA"},
-        {id: 3, artist: "Dua Lipa", title: "Levitating", album: "Future Nostalgia"},
-        {id: 4, artist: "Post Malone & Swae Lee", title: "Sunflower", album: "Spider-Man: Into the Spider-Verse"},
-        {id: 5, artist: "The Weeknd & Daft Punk", title: "I Feel It Coming", album: "Starboy"},
-        {id: 6, artist: "Modjo", title: "Lady - Hear Me Tonight", album: "Modjo (Remastered)"},
-        {id: 7, artist: "Electric Light Orchestra", title: "Mr. Blue Sky", album: "Out of the Blue"},
-        {id: 8, artist: "Haddaway", title: "What Is Love - 7\" Mix", album: "The Album"},
-        {id: 9, artist: "Metro Boomin, A$AP Rocky & Roisee", title: "Am I Dreaming", album: "Spider-Man: Across the Spider-Verse"},
-        {id: 10, artist: "Kendrick Lamar & SZA", title: "All The Stars", album: "Black Panther"},
-        {id: 11, artist: "Clean Bandit & Zara Larsson", title: "Symphony", album: "What Is Love? (Deluxe)"},
-        {id: 12, artist: "John Newman", title: "Love Me Again", album: "Tribute"}
-    ])
+const props = defineProps({
+  articles: { type: Array, required: true },
+  modeAdmin: { type: Boolean, default: false },
+  parPage: { type: Number, default: 8 },
+})
+const emit = defineEmits(['supprimer'])
+
+const recherche = ref('')
+const genreChoisi = ref('Tous')
+const pageActuelle = ref(1)
+
+// Bonus : filtre par genre (la "catégorie" d'une chanson), construit
+// dynamiquement depuis les articles
+const genres = computed(() => {
+  const set = new Set(props.articles.map((a) => a.genre))
+  return ['Tous', ...set]
+})
+
+const articlesFiltres = computed(() => {
+  const texte = recherche.value.toLowerCase().trim()
+  return props.articles.filter((a) => {
+    const correspondTexte =
+      a.titre.toLowerCase().includes(texte) || a.artiste.toLowerCase().includes(texte)
+    const correspondGenre = genreChoisi.value === 'Tous' || a.genre === genreChoisi.value
+    return correspondTexte && correspondGenre
+  })
+})
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(articlesFiltres.value.length / props.parPage))
+)
+
+const articlesPage = computed(() => {
+  const debut = (pageActuelle.value - 1) * props.parPage
+  return articlesFiltres.value.slice(debut, debut + props.parPage)
+})
+
+// Si on tape une recherche, on revient à la page 1 (sinon on peut se
+// retrouver sur une page vide qui n'existe plus dans les résultats filtrés)
+watch([recherche, genreChoisi], () => {
+  pageActuelle.value = 1
+})
+
+function pagePrecedente() {
+  if (pageActuelle.value > 1) pageActuelle.value--
+}
+function pageSuivante() {
+  if (pageActuelle.value < totalPages.value) pageActuelle.value++
+}
 </script>
 
 <template>
-
-    <div id="bigdiv">
-        <BarreRecherche message="Search a song to add to your favorites..."></BarreRecherche>
-        <div id="v-for-list">
-            <div v-for="value in articles" :key="value.id">
-                <ArticleItem :artist="value.artist" :album="value.album" :title="value.title"></ArticleItem>
-            </div>
-        </div>
+  <div class="liste-articles">
+    <div class="controles">
+      <BarreRecherche v-model="recherche" placeholder="Rechercher un titre ou un artiste..." />
+      <select v-model="genreChoisi" class="filtre-categorie">
+        <option v-for="genre in genres" :key="genre" :value="genre">{{ genre }}</option>
+      </select>
     </div>
 
+    <p v-if="articlesFiltres.length === 0" class="vide">
+      Aucune chanson ne correspond à votre recherche.
+    </p>
+
+    <div v-else class="grille">
+      <ArticleItem
+        v-for="article in articlesPage"
+        :key="article.id"
+        :article="article"
+        :mode-admin="modeAdmin"
+        @supprimer="emit('supprimer', $event)"
+      />
+    </div>
+
+    <div v-if="totalPages > 1" class="pagination">
+      <button :disabled="pageActuelle === 1" @click="pagePrecedente">← Précédent</button>
+      <span>Page {{ pageActuelle }} / {{ totalPages }}</span>
+      <button :disabled="pageActuelle === totalPages" @click="pageSuivante">Suivant →</button>
+    </div>
+  </div>
 </template>
-
-<style>
-    @property --w_raw {
-    syntax: '<length>';
-    inherits: true;
-    initial-value: 100vw;
-    }
-
-    @property --h_raw {
-    syntax: '<length>';
-    inherits: true;
-    initial-value: 100vh;
-    }
-
-    #bigdiv {
-        width: var(--w_raw);
-    }
-
-    #v-for-list {
-        margin: 5em 0 0 0;
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-        width: 100%;
-    }
-
-    #v-for-list div {
-        min-height: 5em;
-        margin: 0.2em;
-    }
-</style>
